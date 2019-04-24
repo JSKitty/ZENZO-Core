@@ -1666,7 +1666,7 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "msghand", &ThreadMessageHandler));
 
     // Dump network addresses
-    scheduler.scheduleEvery(&DumpAddresses, DUMP_ADDRESSES_INTERVAL * 1000));
+    scheduler.scheduleEvery(&DumpAddresses, DUMP_ADDRESSES_INTERVAL * 1000);
 
   #ifdef ENABLE_WALLET
     // ppcoin:mint proof-of-stake blocks in the background
