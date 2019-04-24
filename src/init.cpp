@@ -1628,6 +1628,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         uiInterface.NotifyBlockTip.connect(BlockNotifyCallback);
 
     // scan for better chains in the block chain database, that are not yet connected in the active best chain
+    uiInterface.InitMessage(_("Activating best chain..."));
     CValidationState state;
     if (!ActivateBestChain(state))
         strErrors << "Failed to connect best block";
