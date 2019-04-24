@@ -26,9 +26,9 @@ QT_BEGIN_NAMESPACE
 class QUrl;
 QT_END_NAMESPACE
 
-const int defaultConfirmTarget = 25;
+const int defaultConfirmTarget = 5;
 
-/** Dialog for sending bitcoins */
+/** Dialog for sending ZNZ */
 class SendCoinsDialog : public QDialog
 {
     Q_OBJECT
