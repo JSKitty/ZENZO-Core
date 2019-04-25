@@ -55,7 +55,9 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/bind.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/function.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/thread.hpp>
 #include <openssl/crypto.h>
@@ -1939,6 +1941,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         StartTorControl(threadGroup);
 
     StartNode(threadGroup, scheduler);
+
+    // Monitor the chain, and alert if we get blocks much quicker or slower than expected
+    int64_t nPosTargetSpacing = Params().TargetSpacing();
+    CScheduler::Function f = boost::bind(&PartitionCheck, &IsInitialBlockDownload,
+                                         boost::ref(cs_main), boost::cref(chainActive), nPosTargetSpacing);
+    scheduler.scheduleEvery(f, nPosTargetSpacing);
 
 #ifdef ENABLE_WALLET
     // Generate coins in the background

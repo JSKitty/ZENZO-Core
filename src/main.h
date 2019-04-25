@@ -248,6 +248,8 @@ bool ProcessMessages(CNode* pfrom);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 /** Run an instance of the script checking thread */
 void ThreadScriptCheck();
+/** Try to detect Partition (network isolation) attacks against us */
+void PartitionCheck(bool (*initialDownloadCheck)(), CCriticalSection& cs, const CChain& chain, int64_t nTargetSpacing);
 
 // ***TODO*** probably not the right place for these 2
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
