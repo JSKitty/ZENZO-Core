@@ -338,14 +338,14 @@ std::string HelpMessage(HelpMessageMode mode)
 #ifndef WIN32
     strUsage += HelpMessageOpt("-pid=<file>", strprintf(_("Specify pid file (default: %s)"), "zenzod.pid"));
 #endif
-    strUsage += HelpMessageOpt("-prune=<n>", _("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex.") + " " +
+    strUsage += HelpMessageOpt("light=<n>", _("Reduce storage requirements by pruning (deleting) old blocks. This mode is incompatible with -txindex and -reindex.") + " " +
         _("Warning: Reverting this setting requires re-downloading the entire blockchain.") + " " +
         _("(default: 0 = disable pruning blocks,") + " " +
         strprintf(_(">%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-reindexaccumulators", _("Reindex the accumulator database") + " " + _("on startup"));
-    strUsage += HelpMessageOpt("-reindexmoneysupply", _("Reindex the ZNZ and zZNZ money supply statistics") + " " + _("on startup"));
+    strUsage += HelpMessageOpt("-reindexmoneysupply", _("Reindex the ZNZ money supply statistics") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-resync", _("Delete blockchain folders and resync from scratch") + " " + _("on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
@@ -592,7 +592,7 @@ void CleanupBlockRevFiles()
     // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
     // Remove the rev files immediately and insert the blk file paths into an
     // ordered map keyed by block file index.
-    LogPrintf("Removing unusable blk?????.dat and rev?????.dat files for -reindex with -prune\n");
+    LogPrintf("Removing unusable blk?????.dat and rev?????.dat files for -reindex with -light\n");
     path blocksdir = GetDataDir() / "blocks";
     for (directory_iterator it(blocksdir); it != directory_iterator(); it++) {
         if (is_regular_file(*it) &&
@@ -850,16 +850,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         nMaxConnections = nFD - MIN_CORE_FILEDESCRIPTORS;
 
     // if using block pruning, then disable txindex
-    // also disable the wallet (for now, until SPV support is implemented in wallet)
-    if (GetArg("-prune", 0)) {
+    if (GetArg("-light", 0)) {
         if (GetBoolArg("-txindex", false))
-            return InitError(_("Prune mode is incompatible with -txindex."));
+            return InitError(_("Light mode is incompatible with -txindex."));
 #ifdef ENABLE_WALLET
-        if (!GetBoolArg("-disablewallet", false)) {
-            if (SoftSetBoolArg("-disablewallet", true))
-                LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
-            else
-                return InitError(_("Can't run with a wallet in prune mode."));
+        if (GetBoolArg("-rescan", false)) {
+            return InitError(_("Rescans are not possible in Light mode. You will need to use -reindex which will download the whole blockchain again."));
         }
 #endif
     }
@@ -905,9 +901,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fServer = GetBoolArg("-server", false);
 
     // block pruning; get the amount of disk space (in MB) to allot for block & undo files
-    int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
+    uiInterface.InitMessage(_("Checking for Light mode..."));
+    int64_t nSignedPruneTarget = GetArg("-light", 0) * 1024 * 1024;
     if (nSignedPruneTarget < 0) {
-      return InitError(_("Prune cannot be configured with a negative value."));
+      return InitError(_("Light mode cannot be configured with a negative value."));
     }
     nPruneTarget = (uint64_t) nSignedPruneTarget;
     if (nPruneTarget) {
@@ -915,7 +912,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
         }
         LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
-        fPruneMode = true;
+        fLightMode = true;
       }
 
     setvbuf(stdout, NULL, _IOLBF, 0); /// ***TODO*** do we still need this after -printtoconsole is gone?
@@ -1413,7 +1410,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     pblocktree->WriteReindexing(true);
 
                     //If we're reindexing in prune mode, wipe away unusable block files and all undo data files
-                    if (fPruneMode)
+                    if (fLightMode)
                         CleanupBlockRevFiles();
                 }
 
@@ -1519,16 +1516,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     }
                 }
 
-                // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
+                // Check for changed -light state.  What we are concerned about is a user who has pruned blocks
                 // in the past, but is now trying to run unpruned.
-                if (fHavePruned && !fPruneMode) {
-                    strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
+                if (fHavePruned && !fLightMode) {
+                    strLoadError = _("You need to rebuild the database using -reindex to go back to a full node.  This will redownload the entire blockchain");
                     break;
                 }
 
                 uiInterface.InitMessage(_("Verifying blocks..."));
                 if (fHavePruned && GetArg("-checkblocks", 288) > MIN_BLOCKS_TO_KEEP) {
-                    LogPrintf("Prune: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
+                    LogPrintf("Light mode: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
                         MIN_BLOCKS_TO_KEEP, GetArg("-checkblocks", 288));
                 }
 
@@ -1587,9 +1584,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         mempool.ReadFeeEstimates(est_filein);
     fFeeEstimatesInitialized = true;
 
-    // if prune mode, unset NODE_NETWORK and prune block files
-    if (fPruneMode) {
-        LogPrintf("Unsetting NODE_NETWORK on prune mode\n");
+    // if Light mode, unset NODE_NETWORK and prune block files
+    if (fLightMode) {
+        LogPrintf("Unsetting NODE_NETWORK on Light mode\n");
         nLocalServices &= ~NODE_NETWORK;
         if (!fReindex) {
             PruneAndFlush();
@@ -1688,6 +1685,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 pindexRescan = chainActive.Genesis();
         }
         if (chainActive.Tip() && chainActive.Tip() != pindexRescan) {
+            //We can't rescan beyond non-pruned blocks, stop and throw an error
+            //this might happen if a user uses a old wallet within a pruned node
+            // or if he ran -disablewallet for a longer time, then decided to re-enable
+            if (fLightMode)
+            {
+                CBlockIndex *block = chainActive.Tip();
+                while (block && block->pprev && (block->pprev->nStatus & BLOCK_HAVE_DATA) && block->pprev->nTx > 0 && pindexRescan != block)
+                    block = block->pprev;
+
+                if (pindexRescan != block)
+                    return InitError(_("Light mode: last wallet synchronisation goes beyond light data. You need to -reindex (download the whole blockchain again in case of Light node)"));
+            }
+
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
             nStart = GetTimeMillis();

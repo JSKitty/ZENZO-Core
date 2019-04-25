@@ -494,7 +494,7 @@ Value getblockchaininfo(const Array& params, bool fHelp)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getblockchaininfo\n"
-            "Returns an object containing various state info regarding block chain processing.\n"
+            "Returns an object containing various state info regarding blockchain processing.\n"
             "\nResult:\n"
             "{\n"
             "  \"chain\": \"xxxx\",        (string) current network name as defined in BIP70 (main, test, regtest)\n"
@@ -504,8 +504,8 @@ Value getblockchaininfo(const Array& params, bool fHelp)
             "  \"difficulty\": xxxxxx,     (numeric) the current difficulty\n"
             "  \"verificationprogress\": xxxx, (numeric) estimate of verification progress [0..1]\n"
             "  \"chainwork\": \"xxxx\"     (string) total amount of work in active chain, in hexadecimal\n"
-            "  \"pruned\": xx,             (boolean) if the blocks are subject to pruning\n"
-            "  \"pruneheight\": xxxxxx,    (numeric) heighest block available\n"
+            "  \"lightnode\": xx,             (boolean) if the blocks are subject to Light mode pruning\n"
+            "  \"lightheight\": xxxxxx,    (numeric) heighest block available\n"
             "}\n"
             "\nExamples:\n" +
             HelpExampleCli("getblockchaininfo", "") + HelpExampleRpc("getblockchaininfo", ""));
@@ -518,14 +518,14 @@ Value getblockchaininfo(const Array& params, bool fHelp)
     obj.push_back(Pair("difficulty", (double)GetDifficulty()));
     obj.push_back(Pair("verificationprogress", Checkpoints::GuessVerificationProgress(chainActive.Tip())));
     obj.push_back(Pair("chainwork", chainActive.Tip()->nChainWork.GetHex()));
-    obj.push_back(Pair("pruned", fPruneMode));
-    if (fPruneMode)
+    obj.push_back(Pair("lightnode", fLightMode));
+    if (fLightMode)
     {
         CBlockIndex *block = chainActive.Tip();
         while (block && block->pprev && (block->pprev->nStatus & BLOCK_HAVE_DATA))
             block = block->pprev;
 
-        obj.push_back(Pair("pruneheight", block->nHeight));
+        obj.push_back(Pair("lightheight", block->nHeight));
     }
     return obj;
 }
