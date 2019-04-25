@@ -106,6 +106,8 @@ std::string to_internal(const std::string&);
 using namespace std;
 
 // ZENZO only features
+// Light mode
+bool fLightMode = false;
 // Masternode
 bool fMasterNode = false;
 string strMasterNodePrivKey = "";

@@ -31,6 +31,7 @@
 
 //ZENZO only features
 
+extern bool fLightMode;
 extern bool fMasterNode;
 extern bool fLiteMode;
 extern bool fEnableSwiftTX;
