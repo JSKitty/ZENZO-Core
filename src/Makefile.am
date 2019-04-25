@@ -130,6 +130,7 @@ BITCOIN_CORE_H = \
   netbase.h \
   net.h \
   noui.h \
+	fees.h \
   pow.h \
   protocol.h \
   pubkey.h \
@@ -138,6 +139,7 @@ BITCOIN_CORE_H = \
   rpcclient.h \
   rpcprotocol.h \
   rpcserver.h \
+	scheduler.h \
   script/interpreter.h \
   script/script.h \
   script/sigcache.h \
@@ -205,6 +207,7 @@ libbitcoin_server_a_SOURCES = \
   miner.cpp \
   net.cpp \
   noui.cpp \
+	fees.cpp \
   pow.cpp \
   rest.cpp \
   rpcblockchain.cpp \
@@ -383,6 +386,7 @@ libbitcoin_common_a_SOURCES = \
   netbase.cpp \
   protocol.cpp \
   pubkey.cpp \
+	scheduler.cpp \
   script/interpreter.cpp \
   script/script.cpp \
   script/sign.cpp \
