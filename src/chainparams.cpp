@@ -119,6 +119,7 @@ public:
         nRejectBlockOutdatedMajority = 950;
         nToCheckBlockUpgradeMajority = 1000;
         nMinerThreads = 0;
+        nPruneAfterHeight = 100000;
         nTargetTimespan = 1 * 60; // ZENZO: 1 day
         nTargetSpacing = 1 * 60;  // ZENZO: 1 minute
         nMaturity = 50;
@@ -234,6 +235,7 @@ public:
         nRejectBlockOutdatedMajority = 75;
         nToCheckBlockUpgradeMajority = 100;
         nMinerThreads = 0;
+        nPruneAfterHeight = 1000;
         nTargetTimespan = 1 * 60; // ZENZO: 1 day
         nTargetSpacing = 1 * 60;  // ZENZO: 1 minute
         nLastPOWBlock = 200;
@@ -313,6 +315,7 @@ public:
         nRejectBlockOutdatedMajority = 950;
         nToCheckBlockUpgradeMajority = 1000;
         nMinerThreads = 1;
+        nPruneAfterHeight = 1000;
         nTargetTimespan = 24 * 60 * 60; // ZENZO: 1 day
         nTargetSpacing = 1 * 60;        // ZENZO: 1 minutes
         bnProofOfWorkLimit = ~uint256(0) >> 1;

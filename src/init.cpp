@@ -336,6 +336,11 @@ std::string HelpMessage(HelpMessageMode mode)
 #ifndef WIN32
     strUsage += HelpMessageOpt("-pid=<file>", strprintf(_("Specify pid file (default: %s)"), "zenzod.pid"));
 #endif
+    strUsage += HelpMessageOpt("-prune=<n>", _("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex.") + " " +
+        _("Warning: Reverting this setting requires re-downloading the entire blockchain.") + " " +
+        _("(default: 0 = disable pruning blocks,") + " " +
+        strprintf(_(">%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-reindexaccumulators", _("Reindex the accumulator database") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-reindexmoneysupply", _("Reindex the ZNZ and zZNZ money supply statistics") + " " + _("on startup"));
@@ -573,6 +578,46 @@ struct CImportingNow {
     }
 };
 
+// is missing, do the same here to delete any later block files after a gap.  Also delete all
+// rev files since they'll be rewritten by the reindex anyway.  This ensures that vinfoBlockFile
+// is in sync with what's actually on disk by the time we start downloading, so that pruning
+// works correctly.
+void CleanupBlockRevFiles()
+{
+    using namespace boost::filesystem;
+    map<string, path> mapBlockFiles;
+
+    // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
+    // Remove the rev files immediately and insert the blk file paths into an
+    // ordered map keyed by block file index.
+    LogPrintf("Removing unusable blk?????.dat and rev?????.dat files for -reindex with -prune\n");
+    path blocksdir = GetDataDir() / "blocks";
+    for (directory_iterator it(blocksdir); it != directory_iterator(); it++) {
+        if (is_regular_file(*it) &&
+            it->path().filename().string().length() == 12 &&
+            it->path().filename().string().substr(8,4) == ".dat")
+        {
+            if (it->path().filename().string().substr(0,3) == "blk")
+                mapBlockFiles[it->path().filename().string().substr(3,5)] = it->path();
+            else if (it->path().filename().string().substr(0,3) == "rev")
+                remove(it->path());
+        }
+    }
+
+    // Remove all block files that aren't part of a contiguous set starting at
+    // zero by walking the ordered map (keys are block file indices) by
+    // keeping a separate counter.  Once we hit a gap (or if 0 doesn't exist)
+    // start removing block files.
+    int nContigCounter = 0;
+    BOOST_FOREACH(const PAIRTYPE(string, path)& item, mapBlockFiles) {
+        if (atoi(item.first) == nContigCounter) {
+            nContigCounter++;
+            continue;
+        }
+        remove(item.second);
+    }
+}
+
 void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
 {
     RenameThread("zenzo-loadblk");
@@ -802,6 +847,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (nFD - MIN_CORE_FILEDESCRIPTORS < nMaxConnections)
         nMaxConnections = nFD - MIN_CORE_FILEDESCRIPTORS;
 
+    // if using block pruning, then disable txindex
+    // also disable the wallet (for now, until SPV support is implemented in wallet)
+    if (GetArg("-prune", 0)) {
+        if (GetBoolArg("-txindex", false))
+            return InitError(_("Prune mode is incompatible with -txindex."));
+#ifdef ENABLE_WALLET
+        if (!GetBoolArg("-disablewallet", false)) {
+            if (SoftSetBoolArg("-disablewallet", true))
+                LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
+            else
+                return InitError(_("Can't run with a wallet in prune mode."));
+        }
+#endif
+    }
+
     // ********************************************************* Step 3: parameter-to-internal-flags
 
     fDebug = !mapMultiArgs["-debug"].empty();
@@ -841,6 +901,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         nScriptCheckThreads = MAX_SCRIPTCHECK_THREADS;
 
     fServer = GetBoolArg("-server", false);
+
+    // block pruning; get the amount of disk space (in MB) to allot for block & undo files
+    int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
+    if (nSignedPruneTarget < 0) {
+      return InitError(_("Prune cannot be configured with a negative value."));
+    }
+    nPruneTarget = (uint64_t) nSignedPruneTarget;
+    if (nPruneTarget) {
+      if (nPruneTarget < MIN_DISK_SPACE_FOR_BLOCK_FILES) {
+          return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+        }
+        LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
+        fPruneMode = true;
+      }
+
     setvbuf(stdout, NULL, _IOLBF, 0); /// ***TODO*** do we still need this after -printtoconsole is gone?
 
     // Staking needs a CWallet instance, so make sure wallet is enabled
@@ -1332,8 +1407,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
                 pcoinsTip = new CCoinsViewCache(pcoinscatcher);
 
-                if (fReindex)
+                if (fReindex) {
                     pblocktree->WriteReindexing(true);
+
+                    //If we're reindexing in prune mode, wipe away unusable block files and all undo data files
+                    if (fPruneMode)
+                        CleanupBlockRevFiles();
+                }
 
                 // ZENZO: load previous sessions sporks if we have them.
                 uiInterface.InitMessage(_("Loading sporks..."));
@@ -1437,7 +1517,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     }
                 }
 
+                // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
+                // in the past, but is now trying to run unpruned.
+                if (fHavePruned && !fPruneMode) {
+                    strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
+                    break;
+                }
+
                 uiInterface.InitMessage(_("Verifying blocks..."));
+                if (fHavePruned && GetArg("-checkblocks", 288) > MIN_BLOCKS_TO_KEEP) {
+                    LogPrintf("Prune: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
+                        MIN_BLOCKS_TO_KEEP, GetArg("-checkblocks", 288));
+                }
 
                 // Flag sent to validation code to let it know it can skip certain checks
                 fVerifyingBlocks = true;
@@ -1493,6 +1584,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (!est_filein.IsNull())
         mempool.ReadFeeEstimates(est_filein);
     fFeeEstimatesInitialized = true;
+
+    // if prune mode, unset NODE_NETWORK and prune block files
+    if (fPruneMode) {
+        LogPrintf("Unsetting NODE_NETWORK on prune mode\n");
+        nLocalServices &= ~NODE_NETWORK;
+        if (!fReindex) {
+            PruneAndFlush();
+        }
+    }
 
 // ********************************************************* Step 8: load wallet
 #ifdef ENABLE_WALLET
