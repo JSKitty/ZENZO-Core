@@ -1787,7 +1787,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
         if (!tx.IsZerocoinSpend())
             view.GetPriority(tx, chainActive.Height());
 
-        CTxMemPoolEntry entry(tx, nFees, GetTime(), dPriority, chainActive.Height());
+        CTxMemPoolEntry entry(tx, nFees, GetTime(), dPriority, chainActive.Height(), mempool.HasNoInputsOf(tx));
         unsigned int nSize = entry.GetTxSize();
 
         // Don't accept it if it can't get into a block
@@ -1858,7 +1858,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState& state, const CTransa
         }
 
         // Store transaction in memory
-        pool.addUnchecked(hash, entry);
+        pool.addUnchecked(hash, entry, !IsInitialBlockDownload());
     }
 
     SyncWithWallets(tx, NULL);
@@ -3134,6 +3134,7 @@ bool static FlushStateToDisk(CValidationState& state, FlushStateMode mode)
     try {
       if (fPruneMode && fCheckForPruning) {
         FindFilesToPrune(setFilesToPrune);
+        fCheckForPruning = false;
         if (!setFilesToPrune.empty()) {
           fFlushForPrune = true;
           if (!fHavePruned) {
@@ -3179,10 +3180,8 @@ bool static FlushStateToDisk(CValidationState& state, FlushStateMode mode)
                 return state.Abort("Failed to write to coin database");
 
             // Finally remove any pruned files
-            if (fFlushForPrune) {
+            if (fFlushForPrune)
                 UnlinkPrunedFiles(setFilesToPrune);
-                fCheckForPruning = false;
-            }
 
             // Update best block in wallet (so we can detect restored wallets).
             if (mode != FLUSH_STATE_IF_NEEDED) {
@@ -3356,7 +3355,7 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, CBlock* 
 
     // Remove conflicting transactions from the mempool.
     list<CTransaction> txConflicted;
-    mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted);
+    mempool.removeForBlock(pblock->vtx, pindexNew->nHeight, txConflicted, !IsInitialBlockDownload());
     mempool.check(pcoinsTip);
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
