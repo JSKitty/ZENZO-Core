@@ -109,7 +109,7 @@ Value importprivkey(const Array& params, bool fHelp)
     if (params.size() > 2)
         fRescan = params[2].get_bool();
 
-    if (fRescan && fPruneMode)
+    if (fRescan && fLightMode)
         throw JSONRPCError(RPC_WALLET_ERROR, "Rescan is disabled in pruned mode");
 
     CBitcoinSecret vchSecret;
@@ -185,7 +185,7 @@ Value importaddress(const Array& params, bool fHelp)
     if (params.size() > 2)
         fRescan = params[2].get_bool();
 
-    if (fRescan && fPruneMode)
+    if (fRescan && fLightMode)
         throw JSONRPCError(RPC_WALLET_ERROR, "Rescan is disabled in pruned mode");
 
     {

@@ -27,6 +27,7 @@
 
 #include <QDir>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QScrollBar>
 #include <QThread>
 #include <QTime>
@@ -221,8 +222,8 @@ void RPCExecutor::request(const QString& command)
 RPCConsole::RPCConsole(QWidget* parent) : QDialog(parent),
                                           ui(new Ui::RPCConsole),
                                           clientModel(0),
-                                          historyPtr(0),
-                                          cachedNodeid(-1)
+                                          cachedNodeid(-1),
+                                          contextMenu(0)
 {
     ui->setupUi(this);
     GUIUtil::restoreWindowGeometry("nRPCConsoleWindow", this->size(), this);
@@ -340,12 +341,24 @@ void RPCConsole::setClientModel(ClientModel* model)
         updateTrafficStats(model->getTotalBytesRecv(), model->getTotalBytesSent());
         connect(model, SIGNAL(bytesChanged(quint64, quint64)), this, SLOT(updateTrafficStats(quint64, quint64)));
 
+        // create context menu actions
+        QAction* disconnectAction = new QAction(tr("&Disconnect Node"), this);
+
+        // create context menu
+        contextMenu = new QMenu();
+        contextMenu->addAction(disconnectAction);
+
+        // context menu signals
+        connect(ui->peerWidget, SIGNAL(customContextMenuRequested(const QPoint&)), this, SLOT(showMenu(const QPoint&)));
+        connect(disconnectAction, SIGNAL(triggered()), this, SLOT(disconnectSelectedNode()));
+
         // set up peer table
         ui->peerWidget->setModel(model->getPeerTableModel());
         ui->peerWidget->verticalHeader()->hide();
         ui->peerWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
         ui->peerWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
         ui->peerWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+        ui->peerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
         ui->peerWidget->setColumnWidth(PeerTableModel::Address, ADDRESS_COLUMN_WIDTH);
         ui->peerWidget->setColumnWidth(PeerTableModel::Subversion, SUBVERSION_COLUMN_WIDTH);
         ui->peerWidget->setColumnWidth(PeerTableModel::Ping, PING_COLUMN_WIDTH);
@@ -835,6 +848,24 @@ void RPCConsole::hideEvent(QHideEvent* event)
 
     // stop PeerTableModel auto refresh
     clientModel->getPeerTableModel()->stopAutoRefresh();
+}
+
+void RPCConsole::showMenu(const QPoint& point)
+{
+    QModelIndex index = ui->peerWidget->indexAt(point);
+    if (index.isValid())
+        contextMenu->exec(QCursor::pos());
+}
+
+void RPCConsole::disconnectSelectedNode()
+{
+    // Get currently selected peer address
+    QString strNode = GUIUtil::getEntryData(ui->peerWidget, 0, PeerTableModel::Address);
+    // Find the node, disconnect it and clear the selected node
+    if (CNode *bannedNode = FindNode(strNode.toStdString())) {
+        bannedNode->fDisconnect = true;
+        ui->peerWidget->selectionModel()->clearSelection();
+    }
 }
 
 void RPCConsole::showBackups()

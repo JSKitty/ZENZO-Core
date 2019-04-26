@@ -94,7 +94,7 @@ static inline int64_t roundint64(double d)
 CAmount AmountFromValue(const Value& value)
 {
     double dAmount = value.get_real();
-    if (dAmount <= 0.0 || dAmount > 21000000.0)
+    if (dAmount <= 0.0 || dAmount > 83000000.0)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
     CAmount nAmount = roundint64(dAmount * COIN);
     if (!MoneyRange(nAmount))
@@ -238,10 +238,10 @@ Value stop(const Array& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "stop\n"
-            "\nStop Zenzo server.");
+            "\nStop the ZENZO server.");
     // Shutdown will take long enough that the response should get back
     StartShutdown();
-    return "Zenzo server stopping";
+    return "ZENZO server is stopping";
 }
 
 
@@ -260,12 +260,16 @@ static const CRPCCommand vRPCCommands[] =
         /* P2P networking */
         {"network", "getnetworkinfo", &getnetworkinfo, true, false, false},
         {"network", "addnode", &addnode, true, true, false},
+        {"network", "disconnectnode", &disconnectnode, true},
         {"network", "getaddednodeinfo", &getaddednodeinfo, true, true, false},
         {"network", "getconnectioncount", &getconnectioncount, true, false, false},
         {"network", "getdvmstatus", &getdvmstatus, true, false, false},
         {"network", "getnettotals", &getnettotals, true, true, false},
         {"network", "getpeerinfo", &getpeerinfo, true, false, false},
         {"network", "ping", &ping, true, false, false},
+        {"network", "setban", &setban, true},
+        {"network", "listbanned", &listbanned, true},
+        {"network", "clearbanned", &clearbanned, true},
 
         /* Block chain and UTXO */
         {"blockchain", "getblockchaininfo", &getblockchaininfo, true, false, false},
