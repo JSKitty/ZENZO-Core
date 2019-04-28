@@ -55,6 +55,11 @@ static const CAmount nHighTransactionMaxFeeWarning = 100 * nHighTransactionFeeWa
 //! Largest (in bytes) free transaction we're willing to create
 static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
 
+//! if set, all keys will be derived by using BIP32
+static const bool DEFAULT_USE_HD_WALLET = true;
+
+extern const char * DEFAULT_WALLET_DAT;
+
 // Zerocoin denomination which creates exactly one of each denominations:
 // 6666 = 1*5000 + 1*1000 + 1*500 + 1*100 + 1*50 + 1*10 + 1*5 + 1
 static const int ZQ_6666 = 6666;
@@ -73,7 +78,8 @@ enum WalletFeature {
     FEATURE_WALLETCRYPT = 40000, // wallet encryption
     FEATURE_COMPRPUBKEY = 60000, // compressed public keys
 
-    FEATURE_LATEST = 61000
+    FEATURE_HD = 130000, // Hierarchical key derivation after BIP32 (HD Wallet)
+    FEATURE_LATEST = FEATURE_COMPRPUBKEY // HD is optional, use FEATURE_COMPRPUBKEY as latest version
 };
 
 enum AvailableCoinsType {
@@ -184,6 +190,9 @@ private:
     void AddToSpends(const uint256& wtxid);
 
     void SyncMetaData(std::pair<TxSpends::iterator, TxSpends::iterator>);
+
+    /* the hd chain data model (external chain counters) */
+    CHDChain hdChain;
 
 public:
     bool MintableCoins();
@@ -440,7 +449,7 @@ public:
     TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
 
     void MarkDirty();
-    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet = false);
+    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
     void EraseFromWallet(const uint256& hash);
@@ -642,6 +651,19 @@ public:
 
     /** MultiSig address added */
     boost::signals2::signal<void(bool fHaveMultiSig)> NotifyMultiSigChanged;
+
+    /* Returns the wallets help message */
+    static std::string GetWalletHelpString();
+
+    /* initializes the wallet, returns a new CWallet instance or a null pointer in case of an error */
+    static CWallet* InitLoadWallet(bool fDisableWallet, const std::string& strWalletFile, std::string& warningString, std::string& errorString);
+
+    /* Set the HD chain model (chain child index counters) */
+    bool SetHDChain(const CHDChain& chain, bool memonly);
+
+    /* Set the current HD master key (will reset the chain child index counters) */
+    bool SetHDMasterKey(const CKey& key);
+    const CHDChain& GetHDChain() { return hdChain; }
 };
 
 
@@ -1299,7 +1321,7 @@ public:
         return true;
     }
 
-    bool WriteToDisk();
+    bool WriteToDisk(CWalletDB *pwalletdb);
 
     int64_t GetTxTime() const;
     int64_t GetComputedTxTime() const;

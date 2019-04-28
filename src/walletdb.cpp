@@ -460,7 +460,7 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
             if (wtx.nOrderPos == -1)
                 wss.fAnyUnordered = true;
 
-            pwallet->AddToWallet(wtx, true);
+            pwallet->AddToWallet(wtx, true, NULL);
         } else if (strType == "acentry") {
             string strAccount;
             ssKey >> strAccount;
@@ -655,6 +655,16 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
             ssValue >> strValue;
             if (!pwallet->LoadDestData(CBitcoinAddress(strAddress).Get(), strKey, strValue)) {
                 strErr = "Error reading wallet database: LoadDestData failed";
+                return false;
+            }
+        }
+        else if (strType == "hdchain")
+        {
+            CHDChain chain;
+            ssValue >> chain;
+            if (!pwallet->SetHDChain(chain, true))
+            {
+                strErr = "Error reading wallet database: SetHDChain failed";
                 return false;
             }
         }
@@ -1026,6 +1036,12 @@ bool CWalletDB::EraseDestData(const std::string& address, const std::string& key
     return Erase(std::make_pair(std::string("destdata"), std::make_pair(address, key)));
 }
 
+bool CWalletDB::WriteHDChain(const CHDChain& chain)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("hdchain"), chain);
+}
+
 bool CWalletDB::WriteZerocoinSpendSerialEntry(const CZerocoinSpend& zerocoinSpend)
 {
     return Write(make_pair(string("zcserial"), zerocoinSpend.GetSerial()), zerocoinSpend, true);
@@ -1222,7 +1238,7 @@ std::list<CBigNum> CWalletDB::ListMintedCoinsSerial()
 {
     std::list<CBigNum> listPubCoin;
     std::list<CZerocoinMint> listCoins = ListMintedCoins(true, false, false);
-    
+
     for ( auto& coin : listCoins) {
         listPubCoin.push_back(coin.GetSerialNumber());
     }
@@ -1278,7 +1294,7 @@ std::list<CBigNum> CWalletDB::ListSpentCoinsSerial()
 {
     std::list<CBigNum> listPubCoin;
     std::list<CZerocoinSpend> listCoins = ListSpentCoins();
-    
+
     for ( auto& coin : listCoins) {
         listPubCoin.push_back(coin.GetSerial());
     }
@@ -1327,4 +1343,3 @@ std::list<CZerocoinMint> CWalletDB::ListArchivedZerocoins()
     pcursor->close();
     return listMints;
 }
-

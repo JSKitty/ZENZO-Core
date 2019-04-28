@@ -393,29 +393,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
 
 #ifdef ENABLE_WALLET
-    strUsage += HelpMessageGroup(_("Wallet options:"));
-    strUsage += HelpMessageOpt("-createwalletbackups=<n>", _("Number of automatic wallet backups (default: 10)"));
-    strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
-    strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
-    if (GetBoolArg("-help-debug", false))
-        strUsage += HelpMessageOpt("-mintxfee=<amt>", strprintf(_("Fees (in ZNZ/Kb) smaller than this are considered zero fee for transaction creation (default: %s)"),
-            FormatMoney(CWallet::minTxFee.GetFeePerK())));
-    strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in ZNZ/kB) to add to transactions you send (default: %s)"), FormatMoney(payTxFee.GetFeePerK())));
-    strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
-    strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet.dat") + " " + _("on startup"));
-    strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), 0));
-    strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), 1));
-    strUsage += HelpMessageOpt("-disablesystemnotifications", strprintf(_("Disable OS notifications for incoming transactions (default: %u)"), 0));
-    strUsage += HelpMessageOpt("-txconfirmtarget=<n>", strprintf(_("If paytxfee is not set, include enough fee so transactions begin confirmation on average within n blocks (default: %u)"), 1));
-    strUsage += HelpMessageOpt("-maxtxfee=<amt>", strprintf(_("Maximum total fees to use in a single wallet transaction, setting too low may abort large transactions (default: %s)"),
-        FormatMoney(maxTxFee)));
-    strUsage += HelpMessageOpt("-upgradewallet", _("Upgrade wallet to latest format") + " " + _("on startup"));
-    strUsage += HelpMessageOpt("-wallet=<file>", _("Specify wallet file (within data directory)") + " " + strprintf(_("(default: %s)"), "wallet.dat"));
-    strUsage += HelpMessageOpt("-walletnotify=<cmd>", _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)"));
-    if (mode == HMM_BITCOIN_QT)
-        strUsage += HelpMessageOpt("-windowtitle=<name>", _("Wallet window title"));
-    strUsage += HelpMessageOpt("-zapwallettxes=<mode>", _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup") +
-        " " + _("(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)"));
+    strUsage += CWallet::GetWalletHelpString();
 #endif
 
 #if ENABLE_ZMQ
@@ -474,16 +452,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-shrinkdebugfile", _("Shrink debug.log file on client startup (default: 1 when no -debug)"));
     strUsage += HelpMessageOpt("-testnet", _("Use the test network"));
     strUsage += HelpMessageOpt("-litemode=<n>", strprintf(_("Disable all Zenzo specific functionality (Masternodes, Zerocoin, SwiftX, Budgeting) (0-1, default: %u)"), 0));
-
-#ifdef ENABLE_WALLET
-    strUsage += HelpMessageGroup(_("Staking options:"));
-    strUsage += HelpMessageOpt("-staking=<n>", strprintf(_("Enable staking functionality (0-1, default: %u)"), 1));
-    strUsage += HelpMessageOpt("-reservebalance=<amt>", _("Keep the specified amount available for spending at all times (default: 0)"));
-    if (GetBoolArg("-help-debug", false)) {
-        strUsage += HelpMessageOpt("-printstakemodifier", _("Display the stake modifier calculations in the debug.log file."));
-        strUsage += HelpMessageOpt("-printcoinstake", _("Display verbose coin stake messages in the debug.log file."));
-    }
-#endif
 
     strUsage += HelpMessageGroup(_("Masternode options:"));
     strUsage += HelpMessageOpt("-masternode=<n>", strprintf(_("Enable the client to act as a masternode (0-1, default: %u)"), 0));
@@ -983,7 +951,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     bdisableSystemnotifications = GetBoolArg("-disablesystemnotifications", false);
     fSendFreeTransactions = GetBoolArg("-sendfreetransactions", false);
 
-    std::string strWalletFile = GetArg("-wallet", "wallet.dat");
+    std::string strWalletFile = GetArg("-wallet", DEFAULT_WALLET_DAT);
 #endif // ENABLE_WALLET
 
     fIsBareMultisigStd = GetBoolArg("-permitbaremultisig", true) != 0;
@@ -1584,157 +1552,39 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         mempool.ReadFeeEstimates(est_filein);
     fFeeEstimatesInitialized = true;
 
-    // if Light mode, unset NODE_NETWORK and prune block files
-    if (fLightMode) {
-        LogPrintf("Unsetting NODE_NETWORK on Light mode\n");
-        nLocalServices &= ~NODE_NETWORK;
-        if (!fReindex) {
-            PruneAndFlush();
-        }
-    }
-
 // ********************************************************* Step 8: load wallet
 #ifdef ENABLE_WALLET
     if (fDisableWallet) {
         pwalletMain = NULL;
         LogPrintf("Wallet disabled!\n");
     } else {
-        // needed to restore wallet transaction meta data after -zapwallettxes
-        std::vector<CWalletTx> vWtx;
-
-        if (GetBoolArg("-zapwallettxes", false)) {
-            uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
-
-            pwalletMain = new CWallet(strWalletFile);
-            DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
-            if (nZapWalletRet != DB_LOAD_OK) {
-                uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
-                return false;
-            }
-
-            delete pwalletMain;
-            pwalletMain = NULL;
-        }
-
-        uiInterface.InitMessage(_("Loading wallet..."));
-        fVerifyingBlocks = true;
-
-        nStart = GetTimeMillis();
-        bool fFirstRun = true;
-        pwalletMain = new CWallet(strWalletFile);
-        DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
-        if (nLoadWalletRet != DB_LOAD_OK) {
-            if (nLoadWalletRet == DB_CORRUPT)
-                strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
-            else if (nLoadWalletRet == DB_NONCRITICAL_ERROR) {
-                string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
-                             " or address book entries might be missing or incorrect."));
-                InitWarning(msg);
-            } else if (nLoadWalletRet == DB_TOO_NEW)
-                strErrors << _("Error loading wallet.dat: Wallet requires newer version of ZENZO Core") << "\n";
-            else if (nLoadWalletRet == DB_NEED_REWRITE) {
-                strErrors << _("Wallet needed to be rewritten: restart ZENZO Core to complete") << "\n";
-                LogPrintf("%s", strErrors.str());
-                return InitError(strErrors.str());
-            } else
-                strErrors << _("Error loading wallet.dat") << "\n";
-        }
-
-        if (GetBoolArg("-upgradewallet", fFirstRun)) {
-            int nMaxVersion = GetArg("-upgradewallet", 0);
-            if (nMaxVersion == 0) // the -upgradewallet without argument case
-            {
-                LogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
-                nMaxVersion = CLIENT_VERSION;
-                pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
-            } else
-                LogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
-            if (nMaxVersion < pwalletMain->GetVersion())
-                strErrors << _("Cannot downgrade wallet") << "\n";
-            pwalletMain->SetMaxVersion(nMaxVersion);
-        }
-
-        if (fFirstRun) {
-            // Create new keyUser and set as default key
-            RandAddSeedPerfmon();
-
-            CPubKey newDefaultKey;
-            if (pwalletMain->GetKeyFromPool(newDefaultKey)) {
-                pwalletMain->SetDefaultKey(newDefaultKey);
-                if (!pwalletMain->SetAddressBook(pwalletMain->vchDefaultKey.GetID(), "", "receive"))
-                    strErrors << _("Cannot write default address") << "\n";
-            }
-
-            pwalletMain->SetBestChain(chainActive.GetLocator());
-        }
-
-        LogPrintf("%s", strErrors.str());
-        LogPrintf(" wallet      %15dms\n", GetTimeMillis() - nStart);
-
-        RegisterValidationInterface(pwalletMain);
-
-        CBlockIndex* pindexRescan = chainActive.Tip();
-        if (GetBoolArg("-rescan", false))
-            pindexRescan = chainActive.Genesis();
-        else {
-            CWalletDB walletdb(strWalletFile);
-            CBlockLocator locator;
-            if (walletdb.ReadBestBlock(locator))
-                pindexRescan = FindForkInGlobalIndex(chainActive, locator);
-            else
-                pindexRescan = chainActive.Genesis();
-        }
-        if (chainActive.Tip() && chainActive.Tip() != pindexRescan) {
-            //We can't rescan beyond non-pruned blocks, stop and throw an error
-            //this might happen if a user uses a old wallet within a pruned node
-            // or if he ran -disablewallet for a longer time, then decided to re-enable
-            if (fLightMode)
-            {
-                CBlockIndex *block = chainActive.Tip();
-                while (block && block->pprev && (block->pprev->nStatus & BLOCK_HAVE_DATA) && block->pprev->nTx > 0 && pindexRescan != block)
-                    block = block->pprev;
-
-                if (pindexRescan != block)
-                    return InitError(_("Light mode: last wallet synchronisation goes beyond light data. You need to -reindex (download the whole blockchain again in case of Light node)"));
-            }
-
-            uiInterface.InitMessage(_("Rescanning..."));
-            LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
-            nStart = GetTimeMillis();
-            pwalletMain->ScanForWalletTransactions(pindexRescan, true);
-            LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
-            pwalletMain->SetBestChain(chainActive.GetLocator());
-            nWalletDBUpdated++;
-
-            // Restore wallet transaction metadata after -zapwallettxes=1
-            if (GetBoolArg("-zapwallettxes", false) && GetArg("-zapwallettxes", "1") != "2") {
-                BOOST_FOREACH (const CWalletTx& wtxOld, vWtx) {
-                    uint256 hash = wtxOld.GetHash();
-                    std::map<uint256, CWalletTx>::iterator mi = pwalletMain->mapWallet.find(hash);
-                    if (mi != pwalletMain->mapWallet.end()) {
-                        const CWalletTx* copyFrom = &wtxOld;
-                        CWalletTx* copyTo = &mi->second;
-                        copyTo->mapValue = copyFrom->mapValue;
-                        copyTo->vOrderForm = copyFrom->vOrderForm;
-                        copyTo->nTimeReceived = copyFrom->nTimeReceived;
-                        copyTo->nTimeSmart = copyFrom->nTimeSmart;
-                        copyTo->fFromMe = copyFrom->fFromMe;
-                        copyTo->strFromAccount = copyFrom->strFromAccount;
-                        copyTo->nOrderPos = copyFrom->nOrderPos;
-                        copyTo->WriteToDisk();
-                    }
-                }
-            }
-        }
-        fVerifyingBlocks = false;
-
-        bool fEnableZZNZBackups = GetBoolArg("-backupzbrk", true);
-        pwalletMain->setZZNZAutoBackups(fEnableZZNZBackups);
-    }  // (!fDisableWallet)
+      std::string warningString;
+      std::string errorString;
+      pwalletMain = CWallet::InitLoadWallet(fDisableWallet, strWalletFile, warningString, errorString);
+      if (!pwalletMain)
+          return false;
+      if (!warningString.empty())
+          InitWarning(warningString);
+      if (!errorString.empty())
+          return InitError(errorString);
+  }
 #else  // ENABLE_WALLET
     LogPrintf("No wallet compiled in!\n");
 #endif // !ENABLE_WALLET
-    // ********************************************************* Step 9: import blocks
+    // ********************************************************* Step 9: data directory maintenance
+
+    // if pruning, unset the service bit and perform the initial blockstore prune
+    // after any wallet rescanning has taken place.
+    if (fLightMode) {
+        uiInterface.InitMessage(_("Reverting blocks for Lightmode..."));
+        LogPrintf("Unsetting NODE_NETWORK on prune mode\n");
+        nLocalServices &= ~NODE_NETWORK;
+        if (!fReindex) {
+            PruneAndFlush();
+        }
+    }
+
+    // ********************************************************* Step 10: import blocks
 
     if (mapArgs.count("-blocknotify"))
         uiInterface.NotifyBlockTip.connect(BlockNotifyCallback);
@@ -1757,7 +1607,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             MilliSleep(10);
     }
 
-    // ********************************************************* Step 10: setup Obfuscation
+    // ********************************************************* Step 11: setup Obfuscation
 	InitRPCMining();
 
 	uiInterface.InitMessage(_("Loading masternode cache..."));
@@ -1928,7 +1778,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     threadGroup.create_thread(boost::bind(&ThreadCheckObfuScationPool));
 
-    // ********************************************************* Step 11: start node
+    // ********************************************************* Step 12: start node
 
     if (!CheckDiskSpace())
         return false;
@@ -1964,7 +1814,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
 #endif
 
-    // ********************************************************* Step 12: finished
+    // ********************************************************* Step 13: finished
 
     SetRPCWarmupFinished();
     uiInterface.InitMessage(_("Done loading"));
