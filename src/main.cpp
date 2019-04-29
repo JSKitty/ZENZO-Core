@@ -6494,19 +6494,20 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     // Making users (which are behind NAT and can only make outgoing connections) ignore
     // getaddr message mitigates the attack.
     else if ((strCommand == "getaddr") && (pfrom->fInbound)) {
+
+        // Only send one GetAddr response per connection to reduce resource waste
+        //  and discourage addr stamping of INV announcements.
+        if (pfrom->fSentAddr) {
+            LogPrint("net", "Ignoring repeated \"getaddr\". peer=%d\n", pfrom->id);
+            return true;
+        }
+        
+        pfrom->fSentAddr = true;
         pfrom->vAddrToSend.clear();
         vector<CAddress> vAddr = addrman.GetAddr();
         BOOST_FOREACH (const CAddress& addr, vAddr)
             pfrom->PushAddress(addr);
     }
-
-    // Only send one GetAddr response per connection to reduce resource waste
-    //  and discourage addr stamping of INV announcements.
-    if (pfrom->fSentAddr) {
-        LogPrint("net", "Ignoring repeated \"getaddr\". peer=%d\n", pfrom->id);
-        return true;
-    }
-    pfrom->fSentAddr = true;
 
     else if (strCommand == "mempool") {
         LOCK2(cs_main, pfrom->cs_filter);
