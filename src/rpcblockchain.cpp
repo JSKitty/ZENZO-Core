@@ -505,7 +505,7 @@ Value getblockchaininfo(const Array& params, bool fHelp)
             "  \"verificationprogress\": xxxx, (numeric) estimate of verification progress [0..1]\n"
             "  \"chainwork\": \"xxxx\"     (string) total amount of work in active chain, in hexadecimal\n"
             "  \"lightnode\": xx,             (boolean) if the blocks are subject to Light mode pruning\n"
-            "  \"lightheight\": xxxxxx,    (numeric) heighest block available\n"
+            "  \"lightheight\": xxxxxx,    (numeric) lowest-height complete block stored\n"
             "}\n"
             "\nExamples:\n" +
             HelpExampleCli("getblockchaininfo", "") + HelpExampleRpc("getblockchaininfo", ""));
