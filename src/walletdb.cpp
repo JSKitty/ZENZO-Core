@@ -1000,7 +1000,7 @@ bool CWalletDB::Recover(CDBEnv& dbenv, std::string filename, bool fOnlyKeys)
             string strType, strErr;
             bool fReadOK = ReadKeyValue(&dummyWallet, ssKey, ssValue,
                 wss, strType, strErr);
-            if (!IsKeyType(strType))
+            if (!IsKeyType(strType) && strType != "hdchain")
                 continue;
             if (!fReadOK) {
                 LogPrintf("WARNING: CWalletDB::Recover skipping %s: %s\n", strType, strErr);

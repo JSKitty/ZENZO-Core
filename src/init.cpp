@@ -1493,7 +1493,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
                 uiInterface.InitMessage(_("Verifying blocks..."));
                 if (fHavePruned && GetArg("-checkblocks", 288) > MIN_BLOCKS_TO_KEEP) {
-                    LogPrintf("Light mode: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
+                    LogPrintf("Light mode: pruned datadir may not have more than %d blocks; only checking available blocks\n",
                         MIN_BLOCKS_TO_KEEP, GetArg("-checkblocks", 288));
                 }
 
