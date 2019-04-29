@@ -55,6 +55,9 @@
         <file alias="staking_inactive">res/icons/staking_inactive.png</file>
         <file alias="automint_active">res/icons/automint_active.png</file>
         <file alias="automint_inactive">res/icons/automint_inactive.png</file>
+        <file alias="fontbigger">res/icons/fontbigger.png</file>
+        <file alias="fontsmaller">res/icons/fontsmaller.png</file>
+        <file alias="prompticon">res/icons/chevron.png</file>
     </qresource>
     <qresource prefix="/css">
         <file alias="default">res/css/default.css</file>

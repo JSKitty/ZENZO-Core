@@ -17,6 +17,7 @@
 #include "multisigdialog.h"
 #include "optionsmodel.h"
 #include "overviewpage.h"
+#include "platformstyle.h"
 #include "receivecoinsdialog.h"
 #include "privacydialog.h"
 #include "sendcoinsdialog.h"
@@ -37,9 +38,10 @@
 #include <QSettings>
 #include <QVBoxLayout>
 
-WalletView::WalletView(QWidget* parent) : QStackedWidget(parent),
+WalletView::WalletView(const PlatformStyle *platformStyle, QWidget* parent) : QStackedWidget(parent),
                                           clientModel(0),
-                                          walletModel(0)
+                                          walletModel(0),
+                                          platformStyle(platformStyle)
 {
     // Create tabs
     overviewPage = new OverviewPage();

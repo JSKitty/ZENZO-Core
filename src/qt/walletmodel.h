@@ -19,6 +19,7 @@
 
 class AddressTableModel;
 class OptionsModel;
+class PlatformStyle;
 class RecentRequestsTableModel;
 class TransactionTableModel;
 class WalletModelTransaction;
@@ -101,7 +102,7 @@ class WalletModel : public QObject
     Q_OBJECT
 
 public:
-    explicit WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent = 0);
+    explicit WalletModel(const PlatformStyle *platformStyle, CWallet* wallet, OptionsModel* optionsModel, QObject* parent = 0);
     ~WalletModel();
 
     enum StatusCode // Returned by sendCoins
@@ -252,8 +253,8 @@ private:
 
 signals:
     // Signal that balance in wallet changed
-    void balanceChanged(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, 
-                        const CAmount& zerocoinBalance, const CAmount& unconfirmedZerocoinBalance, const CAmount& immatureZerocoinBalance, 
+    void balanceChanged(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance,
+                        const CAmount& zerocoinBalance, const CAmount& unconfirmedZerocoinBalance, const CAmount& immatureZerocoinBalance,
                         const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance);
 
     // Encryption status of wallet changed

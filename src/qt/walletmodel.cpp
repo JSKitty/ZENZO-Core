@@ -29,7 +29,7 @@
 
 using namespace std;
 
-WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent) : QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
+WalletModel::WalletModel(const PlatformStyle *platformStyle, CWallet* wallet, OptionsModel* optionsModel, QObject* parent) : QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
                                                                                          transactionTableModel(0),
                                                                                          recentRequestsTableModel(0),
                                                                                          cachedBalance(0), cachedUnconfirmedBalance(0), cachedImmatureBalance(0),
@@ -162,7 +162,7 @@ void WalletModel::pollBalanceChanged()
 void WalletModel::emitBalanceChanged()
 {
     // Force update of UI elements even when no values have changed
-    emit balanceChanged(cachedBalance, cachedUnconfirmedBalance, cachedImmatureBalance, 
+    emit balanceChanged(cachedBalance, cachedUnconfirmedBalance, cachedImmatureBalance,
                         cachedZerocoinBalance, cachedUnconfirmedZerocoinBalance, cachedImmatureZerocoinBalance,
                         cachedWatchOnlyBalance, cachedWatchUnconfBalance, cachedWatchImmatureBalance);
 }
@@ -201,7 +201,7 @@ void WalletModel::checkBalanceChanged()
         cachedWatchOnlyBalance = newWatchOnlyBalance;
         cachedWatchUnconfBalance = newWatchUnconfBalance;
         cachedWatchImmatureBalance = newWatchImmatureBalance;
-        emit balanceChanged(newBalance, newUnconfirmedBalance, newImmatureBalance, 
+        emit balanceChanged(newBalance, newUnconfirmedBalance, newImmatureBalance,
                             newZerocoinBalance, newUnconfirmedZerocoinBalance, newImmatureZerocoinBalance,
                             newWatchOnlyBalance, newWatchUnconfBalance, newWatchImmatureBalance);
     }
