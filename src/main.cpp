@@ -2257,7 +2257,7 @@ bool IsInitialBlockDownload()
     if (lockIBDState)
         return false;
     bool state = (chainActive.Height() < pindexBestHeader->nHeight - 24 * 6 ||
-                  pindexBestHeader->GetBlockTime() < GetTime() - 6 * 60 * 60); // ~144 blocks behind -> 2 x fork detection time
+                  std::max(chainActive.Tip()->GetBlockTime(), pindexBestHeader->GetBlockTime()) < GetTime() - 6 * 60 * 60); // ~144 blocks behind -> 2 x fork detection time
     if (!state)
         lockIBDState = true;
     return state;
@@ -6501,7 +6501,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             LogPrint("net", "Ignoring repeated \"getaddr\". peer=%d\n", pfrom->id);
             return true;
         }
-        
+
         pfrom->fSentAddr = true;
         pfrom->vAddrToSend.clear();
         vector<CAddress> vAddr = addrman.GetAddr();
