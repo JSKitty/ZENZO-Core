@@ -2031,6 +2031,7 @@ CNode::CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn, bool fIn
     nStartingHeight = -1;
     fGetAddr = false;
     fRelayTxes = false;
+    fSentAddr = false;
     setInventoryKnown.max_size(SendBufferSize() / 1000);
     pfilter = new CBloomFilter();
     nPingNonceSent = 0;

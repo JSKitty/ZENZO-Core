@@ -262,6 +262,7 @@ public:
     // b) the peer may tell us in their version message that we should not relay tx invs
     //    until they have initialized their bloom filter.
     bool fRelayTxes;
+    bool fSentAddr;
     // Should be 'true' only if we connected to this node to actually mix funds.
     // In this case node will be released automatically via CMasternodeMan::ProcessMasternodeConnections().
     // Connecting to verify connectability/status or connecting for sending/relaying single message

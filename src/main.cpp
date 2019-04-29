@@ -6500,6 +6500,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->PushAddress(addr);
     }
 
+    // Only send one GetAddr response per connection to reduce resource waste
+    //  and discourage addr stamping of INV announcements.
+    if (pfrom->fSentAddr) {
+        LogPrint("net", "Ignoring repeated \"getaddr\". peer=%d\n", pfrom->id);
+        return true;
+    }
+    pfrom->fSentAddr = true;
 
     else if (strCommand == "mempool") {
         LOCK2(cs_main, pfrom->cs_filter);
